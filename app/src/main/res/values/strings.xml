@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">testrestapi</string>
+    <string name="iniciar_escucha">Iniciar escucha</string>
+    <string name="prueba_de_lectura">Prueba de lectura</string>
+</resources>
