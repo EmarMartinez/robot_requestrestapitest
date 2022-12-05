@@ -12,6 +12,7 @@ import com.ainirobot.coreservice.client.listener.TextListener;
 import com.ainirobot.coreservice.client.speech.SkillApi;
 import com.ainirobot.coreservice.client.speech.SkillCallback;
 import com.ainirobot.coreservice.client.speech.entity.TTSEntity;
+import com.example.testrestapi.application.Status;
 import com.example.testrestapi.model.IncomingOrder;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -54,16 +55,18 @@ public class MainActivity extends AppCompatActivity {
         onStartActivity();
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        System.out.println("ENTRANDO A ON START");
-    }
+//    @Override
+//    protected void onStart() {
+//        super.onStart();
+//        System.out.println("ENTRANDO A ON START");
+//    }
 
     private void onStartActivity() {
         System.out.println("OnStart.....");
         Thread mainThread = new Thread(new MainLoop(this));
         mainThread.start();
+        Thread statusUpdateThread = new Thread(new Status(this));
+        statusUpdateThread.start();
     }
 
 
