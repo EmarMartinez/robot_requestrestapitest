@@ -21,36 +21,27 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.*;
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int SLEEP_TIME = 60 * 1000;
+    private static final int SLEEP_TIME = 1 * 1000;
 
-    Button btnEscucha;
     Button btnPrueba;
 
     private Context mContext;
     private SkillApi mSkillApi;
     private SkillCallback mSkillCallback;
-    IncomingOrder lastOrder;
-    boolean isOrderReceived = false;
+    boolean finishedLastOrder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        System.out.println("Arrancando.....");
+        initSkillApi();
+        finishedLastOrder = true;
 
-//        initSkillApi();
-
-        btnEscucha = (Button)findViewById(R.id.iniciar_escucha);
-        btnEscucha.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-                startListening();
-//                checkOrder();
-            }
-        });
         mContext = this;
         btnPrueba = (Button)findViewById(R.id.btn_prueba);
         btnPrueba.setOnClickListener(new View.OnClickListener() {
@@ -60,17 +51,24 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        onStartActivity();
+    }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        System.out.println("ENTRANDO A ON START");
     }
-    private void checkOrder() {
-        while(!isOrderReceived){
-            System.out.println("Esperando respuesta de REST");
-        }
-        System.out.println(lastOrder);
-        this.isOrderReceived = false;
+
+    private void onStartActivity() {
+        System.out.println("OnStart.....");
+        Thread mainThread = new Thread(new MainLoop(this));
+        mainThread.start();
     }
+
 
     private void initSkillApi() {
+        System.out.println("OnSkill Api........");
         mSkillApi = new SkillApi();
         ApiListener apiListener = new ApiListener() {
             @Override
@@ -90,29 +88,38 @@ public class MainActivity extends AppCompatActivity {
         mSkillApi.connectApi(this);
     }
 
-    private void playText(String text) {
+    public void playText(String text) {
         if (mSkillApi != null) {
             mSkillApi.playText(new TTSEntity("sid-1234567890", text), mTextListener);
         }
     }
+
+
     private TextListener mTextListener = new TextListener() {
         @Override
         public void onStart() {
             super.onStart();
+            System.out.printf("%1$TH:%1$TM:%1$TS%n", System.currentTimeMillis());
+            System.out.println("onstart");
         }
 
         @Override
         public void onStop() {
             super.onStop();
+            System.out.println("onstop");
         }
 
         @Override
         public void onComplete() {
             super.onComplete();
+            finishedLastOrder = true;
+            System.out.printf("%1$TH:%1$TM:%1$TS%n", System.currentTimeMillis());
+            System.out.println("oncomplete");
         }
 
         @Override
         public void onError() {
+            System.out.println("onerror");
             super.onError();
         }
     };
@@ -128,37 +135,89 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startListening()  {
+    static class MainLoop implements Runnable{
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    URL url = new URL("http:/192.168.1.58:8080/api/v1/order/pending_orders");
-                    URLConnection urlConnection = url.openConnection();
+        private MainActivity ma;
 
-                    Reader r = new InputStreamReader(urlConnection.getInputStream());
-                    BufferedReader br = new BufferedReader(r);
-                    String linea;
-                    while((linea = br.readLine()) != null) {
-                        GsonBuilder builder = new GsonBuilder();
-                        builder.setPrettyPrinting();
-                        Gson gson = builder.create();
-                        IncomingOrder order = gson.fromJson(linea, IncomingOrder.class);
-                        lastOrder = order;
-                        System.out.println(lastOrder);
-                        isOrderReceived = true;
-//                        System.out.println(order.toString());
+        public MainLoop(MainActivity activity) {
+            this.ma = activity;
+
+        }
+
+        @Override
+        public void run() {
+            System.out.println("run....................");
+            IncomingOrder lastOrder = null;
+            while(true) {
+                if(ma.finishedLastOrder) lastOrder = startListening();
+                if(lastOrder != null && ma.finishedLastOrder) {
+                    ma.finishedLastOrder = false;
+                    System.out.printf("%1$TH:%1$TM:%1$TS%n", System.currentTimeMillis());
+                    System.out.println("Procesando orden antes");
+                    processOrder(lastOrder);
+                    System.out.printf("%1$TH:%1$TM:%1$TS%n", System.currentTimeMillis());
+                    System.out.println("Procesando orden despues ");
+
+                } else {
+                    try {
+//                        System.out.println("sleep");
+                        Thread.sleep(SLEEP_TIME);
+                    } catch (InterruptedException e) {
+                        System.out.println(e.getMessage());
                     }
-
-
-                } catch (IOException e) {
-                    System.out.println("catch");
-                    e.printStackTrace();
                 }
             }
-        }).start();
+        }
 
+        private void processOrder(IncomingOrder lastOrder) {
+
+            switch (lastOrder.getAction()) {
+                case "talk":
+                    try {
+                        ma.playText(Objects.requireNonNull(lastOrder.getArguments().get("text")).toString());
+                        System.out.println("texto leido: " + Objects.requireNonNull(lastOrder.getArguments().get("text")).toString());
+                    }
+                    catch(Exception e) {
+                        System.out.println(e.getMessage());
+                        System.out.println("tipo de argumento no reconocido");
+                    }
+                    break;
+                default:
+                    System.out.println("Acción no reconocida");
+                    ma.playText("No known action");
+                    break;
+            }
+        }
+
+        private IncomingOrder startListening() {
+            IncomingOrder order;
+
+            try {
+                URL url = new URL("http:/192.168.10.53:80/api/v1/order/pending_orders");
+                URLConnection urlConnection = url.openConnection();
+
+                Reader r = new InputStreamReader(urlConnection.getInputStream());
+                BufferedReader br = new BufferedReader(r);
+                String linea;
+                while ((linea = br.readLine()) != null) {
+                    GsonBuilder builder = new GsonBuilder();
+                    builder.setPrettyPrinting();
+                    Gson gson = builder.create();
+                    if (linea.trim().isEmpty()) {
+                        return null;
+                    }
+
+                    order = gson.fromJson(linea, IncomingOrder.class);
+                    System.out.println(order);
+                    return order;
+                }
+                return null;
+            } catch (IOException e) {
+                System.out.println("catch");
+                e.printStackTrace();
+                return null;
+            }
+        }
 
     }
 
