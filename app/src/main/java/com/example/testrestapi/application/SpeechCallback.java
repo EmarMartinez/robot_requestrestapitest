@@ -14,12 +14,12 @@ public class SpeechCallback extends SkillCallback {
 
     @Override
     public void onStart() throws RemoteException {
-
+        System.out.println("Empezando a leer");
     }
 
     @Override
     public void onStop() throws RemoteException {
-
+        System.out.println("Terminado de leer");
     }
 
     @Override
